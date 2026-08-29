@@ -1,0 +1,8 @@
+node_modules/
+lib/
+_int/
+runtime/
+*.log
+.env
+.env.*
+# token 基线与锁文件正常追，忽略名单在 token-survey-core 单点带号

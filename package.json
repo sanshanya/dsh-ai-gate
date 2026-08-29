@@ -1,0 +1,88 @@
+{
+  "name": "dsh-ai-gate",
+  "version": "0.1.0-alpha.0",
+  "description": "AI 语义门禁（cordis host）：tools/pre-execute 拦截——零成本词法预滤、滤内三态语义审（allow / approval_required / model_fixable）、评审器断即 fail-closed——一维守门 + BYO 词典施工包",
+  "type": "module",
+  "license": "MIT",
+  "author": "sanshanya",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sanshanya/dsh-ai-gate.git"
+  },
+  "homepage": "https://github.com/sanshanya/dsh-ai-gate#readme",
+  "bugs": "https://github.com/sanshanya/dsh-ai-gate/issues",
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "ai-gate",
+    "semantic-permission",
+    "llm-safety",
+    "pre-execute",
+    "fail-closed"
+  ],
+  "private": false,
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json",
+    "./client": {
+      "default": "./lib/client.js"
+    }
+  },
+  "files": [
+    "lib/",
+    "cordis.patch.yml",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "npm run build:clean && npm run build:lib && npm run build:client",
+    "build:clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
+    "build:lib": "tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/*.test.ts",
+    "budget": "node scripts/token-budget.mjs",
+    "survey": "node scripts/token-survey.mjs",
+    "verify:pack": "node scripts/verify-pack.mjs",
+    "build:client": "node scripts/build-client.mjs",
+    "test:integration": "node --test test/integration/*.test.ts"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-llm": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh": "^0.1.0-rc.6",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.18",
+    "esbuild": "^0.28.2",
+    "js-tiktoken": "^1.0.21",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": "^22.19.0 || >=24.0.0"
+  }
+}

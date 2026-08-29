@@ -1,0 +1,7 @@
+# dsh-ai-gate 挂载例（AI 语义门禁机制件：tools/pre-execute 拦截+语义审——「写允许全能 bot
+# 的最后一道防线」）。复制进你的组合或 profile 层；config 键见 README（注：「不配=没闸」）。
+- insert:
+    - id: ai-gate
+      name: 'dsh-ai-gate'
+      disabled: false
+      config: {}
