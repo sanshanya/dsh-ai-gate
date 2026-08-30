@@ -8,10 +8,12 @@ export interface ClientShim {
     inject(name: string, register: () => unknown): unknown
     register<A, B>(descriptor: {
       name: string
-      id: string
-      order: number
-      label: () => string
-      inject: () => A
+      id?: string
+      order?: number
+      /** 单槽压位：低 value 赢（scope-slots 实证；压过 ui-chat ApprovalCommand 用 -1）。 */
+      priority?: number
+      label?: () => string
+      inject?: () => A
     }, component: unknown): unknown
   }
   effect(fn: () => (() => void) | void, label?: string): void

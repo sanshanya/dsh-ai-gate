@@ -103,10 +103,18 @@ export interface GateDeps extends Partial<ReviewDeps> {
   llm?: LlmFace;
 }
 
-/** 单行文审批卡（C1/RB+RA 钉：纯文本≤240 软预算；分支/cwd/判词/命令首段恒带行内）。 */
+/** W7：安全截断——词界截不断词；超落地逐字段瘦身（判词先瘦）。 */
+function truncSafe(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  if (flat.length <= max) return flat;
+  const cut = flat.slice(0, max);
+  const lastBreak = Math.max(cut.lastIndexOf(" "), cut.lastIndexOf("。"), cut.lastIndexOf("；"), cut.lastIndexOf("，"), cut.lastIndexOf("、"));
+  return `${lastBreak > max * 0.5 ? cut.slice(0, lastBreak) : cut}…`;
+}
+
+/** 单行文审批卡（W7 重排：判词词界截≤120、命令首段恒带防无卡 tool 盲面、≤240 软预算）。 */
 function cardLine(branch: "ai_verdict" | "chain_exhausted", detail: string, cwd: string, head: string): string {
-  const line = `AI GATE·需人工裁决｜分支:${branch}｜判词|实况:${detail}｜cwd:${cwd}｜命令:${head}`;
-  return line.length > 240 ? `${line.slice(0, 240)}…` : line;
+  return `AI GATE｜分支:${branch}｜判词:${truncSafe(detail, 120)}｜命令:${truncSafe(head, 60)}｜cwd:${truncSafe(cwd, 40)}`;
 }
 
 function summarizeAttempts(attempts: AttemptRec[], lastErr: string): string {
@@ -233,7 +241,31 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
   const webServer = ctx.get("webServer") as
     | { register(route: { kind: "exact"; path: string; handler(req: unknown, res: unknown): void }): () => void }
     | undefined;
+  /** W7：pending callId→裁决payload（审批详情面板的数据源；10 分钟 TTL+200 顶）。 */
+  const pendingVerdicts = new Map<string, { tool: string; raw: string; cwd: string; branch: string; judgment: string; expires: number }>();
+  const rememberVerdict = (exec2: PreExecuteExec, raw2: string, cwd2: string, branch2: string, judgment2: string): void => {
+    const key = String(exec2.callId ?? "");
+    if (key === "") return;
+    pendingVerdicts.set(key, { tool: String(exec2.name ?? ""), raw: raw2, cwd: cwd2, branch: branch2, judgment: judgment2, expires: Date.now() + 600_000 });
+    if (pendingVerdicts.size > 200) { const first = pendingVerdicts.keys().next().value; if (first !== undefined) pendingVerdicts.delete(first); }
+  };
   if (webServer !== undefined) {
+    ctx.effect(
+      () => webServer.register({
+        kind: "exact",
+        path: "/ai-gate/detail.json",
+        handler(req: unknown, res: unknown) {
+          const rq = req as { url?: string };
+          const r = res as { writeHead(code: number, headers: Record<string, string>): void; end(body: string): void };
+          const id = new URL(rq.url ?? "/", "http://g.invalid").searchParams.get("callId") ?? "";
+          const hit = pendingVerdicts.get(id);
+          if (hit === undefined || hit.expires < Date.now()) { if (hit !== undefined) pendingVerdicts.delete(id); r.writeHead(404, {}); r.end("{}"); return; }
+          r.writeHead(200, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+          r.end(JSON.stringify(hit));
+        },
+      }),
+      "ai-gate: detail route",
+    );
     ctx.effect(
       () => webServer.register({
         kind: "exact",
@@ -361,6 +393,7 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
         const detail = summarizeAttempts(outcome.attempts, outcome.lastErr);
         status.record(toolName, "chain_exhausted", Date.now() - reviewStarted);
         forensic.line(decisionLine(toolName, exec.callId, head, "chain_exhausted", detail));
+        rememberVerdict(exec, rawCmd, cwd, "chain_exhausted", detail);
         return { kind: "ask", reason: cardLine("chain_exhausted", detail, cwd, head) };
       }
       const { decision, message } = outcome.verdict;
@@ -372,8 +405,8 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
         const reason = `[AI GATE·deny] ${message}`;
         return { kind: "deny", reason: reason.length > 2000 ? `${reason.slice(0, 2000)}…` : reason };
       }
-      const short = message.length > 120 ? `${message.slice(0, 120)}…` : message;
-      return { kind: "ask", reason: cardLine("ai_verdict", short, cwd, head) };
+      rememberVerdict(exec, rawCmd, cwd, "ai_verdict", message);
+      return { kind: "ask", reason: cardLine("ai_verdict", message, cwd, head) };
     },
     { prepend: true, global: true }, // RA-M6 裁：GATE 最外层先判；allow 后内层听者（hooks-*/tool-jobs/沙盒）照旧跑
   );

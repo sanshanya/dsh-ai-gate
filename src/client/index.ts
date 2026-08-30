@@ -7,6 +7,7 @@
 import type { ClientShim } from './types.ts'
 import { en, zh, type TFn } from './locales.ts'
 import { GuideSection, type GuideSectionInjected } from './GuideSection.tsx'
+import { GateApprovalDetail } from './GateApprovalDetail.tsx'
 
 /** 稳定插件 id——对位 cordis.patch.yml row+package name。 */
 export const name = 'dsh-ai-gate'
@@ -28,6 +29,12 @@ export function apply(ctx: ClientShim): void {
     label: () => t('nav'),
     inject: injectFace,
   }, GuideSection))
+  // W7：conversation.approval.detail 单槽——priority -1 稳压 ui-chat ApprovalCommand（未配 priority=0、注册稳定序）；
+  // 判不出的审批回退到原装行为（命令文本）——不偷别人地盘。
+  ctx.slots.inject('conversation.approval.detail', () => ctx.slots.register({
+    name: 'conversation.approval.detail',
+    priority: -1,
+  }, GateApprovalDetail))
 }
 
 export { GuideSection }

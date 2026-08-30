@@ -105,7 +105,7 @@ test("T4 ask 单行文卡四段恒带", async () => {
   const r = d?.reason ?? "";
   assert.ok(!r.includes("\n"), "单行：无换行");
   assert.ok(r.length <= 240);
-  for (const frag of ["AI GATE·需人工裁决", "分支:ai_verdict", "拿不准", "cwd:/srv/app", "bash:kubectl delete ns prod"]) {
+  for (const frag of ["AI GATE", "分支:ai_verdict", "拿不准", "cwd:/srv/app", "bash:kubectl delete ns prod"]) {
     assert.ok(r.includes(frag), `缺段：${frag}——卡文全量：${r}`);
   }
 });
@@ -200,11 +200,13 @@ test("T13 状态面：注册+五数+recent 无命令", async () => {
   const routes: Array<{ path: string; handler(req: unknown, res: unknown): void }> = [];
   const { ctx, listeners } = makeCtx(llm, routes);
   await apply(ctx as never, { promptPath: md, route: { primary: { provider: "p1", model: "m1" } } }, { llm: llm as never, createUserMessage: CUM, makeAssembler: ASM });
-  assert.equal(routes.length, 1, "状态路由注册一次");
+  assert.equal(routes.length, 2, "状态+详情两路由注册");
+  const statusRoute = routes.find((rr) => rr.path === "/ai-gate/status.json");
+  assert.ok(statusRoute !== undefined, "状态路由在位");
   const d = await listeners[0]!.fn(exec("bash", { command: "rm -rf /protected && echo 别看我" }), next);
   assert.equal(d?.kind, "deny");
   let body = "";
-  routes[0]!.handler({}, {
+  statusRoute!.handler({}, {
     writeHead() {}, end(b: string) { body = b; },
   });
   const snap = JSON.parse(body) as { armed: boolean; stats: Record<string, number>; recent: Array<Record<string, unknown>>; routes: string[] };
