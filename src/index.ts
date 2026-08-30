@@ -6,6 +6,8 @@
 import Schema from "@deepseek-ai/schemastery";
 import type { Context } from "@deepseek-ai/cordis";
 import { BlockAssembler, createUserMessage } from "@deepseek-ai/dsh-llm";
+import { effectivePermissionPreset } from "@deepseek-ai/dsh-permission-presets";
+import type { SessionEvent } from "@deepseek-ai/dsh-session";
 import { readFile } from "node:fs/promises";
 
 import { makeForensic, decisionLine } from "./forensic.ts";
@@ -56,12 +58,28 @@ const KNOWN_READONLY = new Set([
   "cordis_inspect_list", "cordis_inspect_query", "cordis_inspect_self",
 ]);
 
-interface PreExecuteExec {
+
+
+/** v0.4 用户定裁：AI GATE 是一种权限模式（受限 full access）——只在该 preset 生效，其余模式闸冬眠。 */
+export const AI_GATE_MODE = "ai-gate";
+interface SessionsFoldFace {
+  list(): Array<{ id: string; events: readonly SessionEvent[] }>;
+}
+function currentGatePreset(ctx: Context, agent: { sessionId?: string } | undefined): string | undefined {
+  const sid = agent?.sessionId;
+  if (sid === undefined) return undefined;
+  const sessions = ctx.get("sessions") as SessionsFoldFace | undefined;
+  if (!sessions) return undefined;
+  const session = sessions.list().find((cand) => cand.id === sid);
+  return session === undefined ? undefined : effectivePermissionPreset(session.events);
+}interface PreExecuteExec {
   name?: unknown;
   arguments?: unknown;
   callId?: unknown;
   parent?: unknown;
   signal?: AbortSignal;
+  /** 活会话身份（RB/T9：agent 与 session 同身份；模式折从这出）。 */
+  agent?: { sessionId?: string };
 }
 type PreExecuteDecision = { kind: "allow" } | { kind: "deny"; reason: string } | { kind: "ask"; reason: string };
 type Next = (decision?: PreExecuteDecision) => Promise<PreExecuteDecision>;
@@ -170,6 +188,7 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
     ` backup=${routes[1] === undefined ? "无(主×6)" : `${routes[1].provider}/${routes[1].model}`}` +
     ` timeout=${cfg.timeoutMs}ms×6链 readonly=[${[...KNOWN_READONLY].join(" ")}]`,
   );
+  forensic.line(`[ai-gate] 生效域=权限模式「${AI_GATE_MODE}」（其余模式冬眠，零打扰——v0.4 用户定裁）`);
   forensic.line("[ai-gate] 全宇宙仅两张卡：①AI 判 ask ②评审链全灭兜底；其余路径绝不弹卡（I2）");
   forensic.line("[ai-gate] 若本部署审批为无头/never/approval 缺位：卡=隐式拒绝（C4+RA-m11 三条死路宣告）");
 
@@ -209,6 +228,8 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
   onWaterfall(
     "tools/pre-execute",
     async (exec: PreExecuteExec, next: Next) => {
+      // v0.4 模式闸：未入 AI GATE preset = 闸冬眠（用户定裁——不入模式不生效）。
+      if (currentGatePreset(ctx, exec.agent) !== AI_GATE_MODE) return next();
       const toolName = String(exec?.name ?? "");
       // T1：只读 tool 直过——零评审调用、零打扰（I1：只判身份）。
       if (KNOWN_READONLY.has(toolName)) return next();

@@ -10,13 +10,15 @@ import { DECISION_TOOL } from "../src/review.ts";
 
 type Decision = { kind: string; reason?: string } | undefined;
 
-function makeCtx(llm?: unknown, webRoutes?: Array<{ path: string; handler(req: unknown, res: unknown): void }>) {
+const DEFAULT_GATE_SESSIONS = { list() { return [{ id: "s-gate", events: [{ type: "permission/preset", data: { preset: "ai-gate" } }] }]; } };
+function makeCtx(llm?: unknown, webRoutes?: Array<{ path: string; handler(req: unknown, res: unknown): void }>, sessions: unknown = DEFAULT_GATE_SESSIONS) {
   const lines: string[] = [];
   const listeners: Array<{ name: string; fn: (exec: unknown, next: unknown) => Promise<Decision> }> = [];
   const ctx = {
     logger: { info: (m: string) => { lines.push(m); } },
     get: (n: string) => {
       if (n === "llm") return llm;
+      if (n === "sessions") return sessions;
       if (n === "webServer" && webRoutes !== undefined) {
         return { register: (r: { path: string; handler(req: unknown, res: unknown): void }) => { webRoutes.push(r); return () => {}; } };
       }
@@ -57,7 +59,8 @@ function fakeLlm(steps: Step[], providers: string[] = ["p1", "p2"]) {
 
 const next = async (d?: Decision): Promise<Decision> => d ?? { kind: "allow" };
 function exec(tool: string, args: Record<string, unknown>, extra: Record<string, unknown> = {}) {
-  return { name: tool, arguments: args, callId: "c-1", ...extra };
+  // 默认携带入模式 agent（与 DEFAULT_GATE_SESSIONS 对位）；冬眠面测试显式覆盖 sessions/agent。
+  return { name: tool, arguments: args, callId: "c-1", agent: { sessionId: "s-gate" }, ...extra };
 }
 
 async function armed(llm: unknown, dirExtra = "") {
@@ -218,4 +221,69 @@ test("T12 嵌套直过只闸 root（RA-M5）", async () => {
   const d = await listener!(exec("bash", { command: "echo nested" }, { parent: {} }), next);
   assert.equal(d?.kind, "allow");
   assert.equal((llm as { calls: unknown[] }).calls.length, 0);
+});
+
+
+// T14-T16：v0.4 模式闸——AI GATE 是一种权限模式，不入模式=冬眠
+const GATE_AGENT = { sessionId: "s-gate" };
+function fakeSessions(preset?: string) {
+  return {
+    list() {
+      if (preset === undefined) return [];
+      return [{ id: "s-gate", events: [{ type: "permission/preset", data: { preset } }] }];
+    },
+  };
+}
+
+test("T14 入模式(preset=ai-gate)：闸醒，正常评审", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gate-t14-"));
+  try {
+    const md = join(dir, "rules.md");
+    await writeFile(md, "禁令书\n", "utf8");
+    const llm = fakeLlm([{ ok: "deny", msg: "禁地" }]);
+    const a = makeCtx(llm, undefined, fakeSessions("ai-gate"));
+    await apply(a.ctx as never, { promptPath: md, route: { primary: { provider: "p1", model: "m1" } } }, { llm: llm as never, createUserMessage: CUM, makeAssembler: ASM });
+    const listener = a.listeners.find((l) => l.name === "tools/pre-execute");
+    assert.ok(listener !== undefined);
+    const d = await listener!.fn(exec("bash", { command: "rm -rf /protected" }, { agent: GATE_AGENT }), next);
+    assert.equal(d?.kind, "deny");
+    assert.equal((llm as { calls: unknown[] }).calls.length, 1, "评审真跑");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("T15 其他模式：冬眠直过零评审", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gate-t15-"));
+  try {
+    const md = join(dir, "rules.md");
+    await writeFile(md, "禁令书\n", "utf8");
+    const llm = fakeLlm([{ ok: "deny", msg: "不该到" }]);
+    const a = makeCtx(llm, undefined, fakeSessions("workspace-write"));
+    await apply(a.ctx as never, { promptPath: md, route: { primary: { provider: "p1", model: "m1" } } }, { llm: llm as never, createUserMessage: CUM, makeAssembler: ASM });
+    const listener = a.listeners.find((l) => l.name === "tools/pre-execute");
+    const d = await listener!.fn(exec("bash", { command: "rm -rf /protected" }, { agent: GATE_AGENT }), next);
+    assert.equal(d?.kind, "allow", "冬眠=直过");
+    assert.equal((llm as { calls: unknown[] }).calls.length, 0, "零评审");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("T16 sessions 缺席/无 agent：仍冬眠直过", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gate-t16-"));
+  try {
+    const md = join(dir, "rules.md");
+    await writeFile(md, "禁令书\n", "utf8");
+    // 无 sessions 服务
+    const llmA = fakeLlm([{ ok: "deny", msg: "不该到" }]);
+    const a = makeCtx(llmA, undefined, null);
+    await apply(a.ctx as never, { promptPath: md, route: { primary: { provider: "p1", model: "m1" } } }, { llm: llmA as never, createUserMessage: CUM, makeAssembler: ASM });
+    const listener = a.listeners.find((l) => l.name === "tools/pre-execute");
+    const dA = await listener!.fn(exec("bash", { command: "rm -rf /protected" }, { agent: GATE_AGENT }), next);
+    assert.equal(dA?.kind, "allow");
+    assert.equal((llmA as { calls: unknown[] }).calls.length, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

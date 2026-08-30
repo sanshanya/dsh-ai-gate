@@ -4,6 +4,7 @@
 
 - **真机 golden 退役至 git 史**（用户令）：test/integration+fixtures+test:integration 脚本+@deepseek-ai/dsh devDep 全删——T9 四例的真机结论已冻结于 docs/v0.3-rewrite-design.md §4.6，回归证明转由 17 枚单元金丝雀承托。
 - **README.zh.md 删**：EN 单语门面。
+- **v0.4 模式闸**：AI GATE 落地为权限模式 preset「ai-gate」（受限 full access：danger-full-access+ask）——listener 首哨折 session 的 permission/preset；未入模式一律冬眠直过（T14-T16 金丝雀）。cordis.patch.yml 自带 permission 行四模式表。
 
 
 Notable changes to dsh-ai-gate. Versions track published git tags (npm artifact when it ships).
