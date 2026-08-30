@@ -238,9 +238,9 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
     routes: routesNow().map((r) => `${r.provider}/${r.model}`),
     readonlyCount: KNOWN_READONLY.size,
   });
-  const webServer = ctx.get("webServer") as
-    | { register(route: { kind: "exact"; path: string; handler(req: unknown, res: unknown): void }): () => void }
-    | undefined;
+  type WebServerFace = { register(route: { kind: "exact"; path: string; handler(req: unknown, res: unknown): void }): () => void };
+  /** §4.6 同款教训：webServer 也得惰性——apply 位可能未上线（v0.5 实证）。 */
+  let webServer: WebServerFace | undefined = ctx.get("webServer") as WebServerFace | undefined;
   /** W7：pending callId→裁决payload（审批详情面板的数据源；10 分钟 TTL+200 顶）。 */
   const pendingVerdicts = new Map<string, { tool: string; raw: string; cwd: string; branch: string; judgment: string; expires: number }>();
   const rememberVerdict = (exec2: PreExecuteExec, raw2: string, cwd2: string, branch2: string, judgment2: string): void => {
@@ -249,9 +249,9 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
     pendingVerdicts.set(key, { tool: String(exec2.name ?? ""), raw: raw2, cwd: cwd2, branch: branch2, judgment: judgment2, expires: Date.now() + 600_000 });
     if (pendingVerdicts.size > 200) { const first = pendingVerdicts.keys().next().value; if (first !== undefined) pendingVerdicts.delete(first); }
   };
-  if (webServer !== undefined) {
+  const bindWebRoutes = (ws: WebServerFace): void => {
     ctx.effect(
-      () => webServer.register({
+      () => ws.register({
         kind: "exact",
         path: "/ai-gate/detail.json",
         handler(req: unknown, res: unknown) {
@@ -267,7 +267,7 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
       "ai-gate: detail route",
     );
     ctx.effect(
-      () => webServer.register({
+      () => ws.register({
         kind: "exact",
         path: STATUS_ROUTE_PATH,
         handler(_req: unknown, res: unknown) {
@@ -287,7 +287,7 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
     if (scope !== undefined) {
       const liveScope = scope;
       ctx.effect(
-        () => webServer.register({
+        () => ws.register({
           kind: "exact",
           path: "/ai-gate/config.json",
           handler(req: unknown, res: unknown) {
@@ -318,8 +318,15 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
       forensic.line("[ai-gate] 活配置面已挂：POST /ai-gate/config.json（写=workspace 用户层；行 config 是 base）");
     }
     forensic.line(`[ai-gate] 状态只读面已挂：GET ${STATUS_ROUTE_PATH}（recent 无命令文本）`);
-  } else {
-    forensic.line("[ai-gate] webServer 不在——状态 JSON 面未挂，forensic 为唯一状态出口");
+  }
+  if (webServer !== undefined) bindWebRoutes(webServer);
+  else {
+    forensic.line("[ai-gate] webServer apply 位不在——状态 JSON 面转惰性补绑（每秒探一次，§4.6 同款）");
+    (ctx as unknown as { setInterval?: (fn: () => void, ms: number) => unknown }).setInterval?.(() => {
+      if (webServer !== undefined) return;
+      webServer = ctx.get("webServer") as WebServerFace | undefined;
+      if (webServer !== undefined) bindWebRoutes(webServer);
+    }, 1000);
   }
 
   let mdMissingWarned = false; // RA-B1 醒条只响一次（fiber 内态）

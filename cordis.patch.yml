@@ -1,7 +1,8 @@
-- insert: dsh-backends-adapters
-  position: after
-  entries:
-    - ai-gate
+- insert:
+  - id: ai-gate
+    name: dsh-ai-gate
+    inject:
+      - webServer
 
 - id: permission
   config:
@@ -19,7 +20,4 @@
         sandbox: danger-full-access
         approval: ask
         name: AI Gate
-        description: 受限 Full access——写行为须过独立上下文 AI 语义评审，拿不准进原生审批卡。
-
-- id: ai-gate
-  name: dsh-ai-gate
+        description: GATE 受限 Full access——写行为须过独立 AI 语义评审
