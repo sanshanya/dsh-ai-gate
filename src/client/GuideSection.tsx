@@ -1,6 +1,7 @@
-/** AI 门禁设置节（v0.5 用户定裁：面板=活配置面，说明书去 README）：状态卡 + 可写配置表单。 */
+/** AI 门禁设置节（v0.5 活配置面；视觉归宗 better-model-provider 先例：样式一根 <style>+全 token。 */
 import { useCallback, useEffect, useState } from "react";
 import type { TFn } from "./locales.ts";
+
 export interface GuideSectionInjected { t: TFn }
 
 interface Snapshot {
@@ -22,14 +23,9 @@ interface LiveForm {
   reasoningEffort: string;
 }
 
+const CHIP_CLASS: Record<string, string> = { allow: "ag-allow", deny: "ag-deny", ask: "ag-ask", chain_exhausted: "ag-exhausted" };
 
-const row: React.CSSProperties = { marginBottom: 8 };
-const label: React.CSSProperties = { display: "inline-block", minWidth: 120, fontWeight: 600 };
-const input: React.CSSProperties = { width: 420, maxWidth: "60%" };
-const card: React.CSSProperties = { border: "1px solid rgba(128,128,128,.35)", borderRadius: 8, padding: 16, marginTop: 16 };
-const VERDICT_COLOR: Record<string, string> = { allow: "#16a34a", deny: "#dc2626", ask: "#d97706", chain_exhausted: "#7c3aed" };
-
-function StatusCard(props: { t: GuideSectionInjected["t"]; onConfig: (c: LiveForm) => void }) {
+function StatusCard(props: { t: TFn; onConfig: (c: LiveForm) => void }) {
   const { t } = props;
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [offline, setOffline] = useState(false);
@@ -45,40 +41,61 @@ function StatusCard(props: { t: GuideSectionInjected["t"]; onConfig: (c: LiveFor
     const timer = setInterval(pull, 5000);
     return () => { live = false; clearInterval(timer); };
   }, []);
-  if (snap === null && !offline) return null;
-  const badge = (text: string, color: string): React.ReactNode =>
-    <span key={text} style={{ background: color, color: "#fff", borderRadius: 10, padding: "2px 10px", fontSize: 12, marginRight: 6 }}>{text}</span>;
   return (
-    <div style={card}>
-      <h3>{t("status_title")}</h3>
-      <p>
-        {offline
-          ? badge(t("status_off"), "#6b7280")
-          : snap !== null && [
-              badge(snap.armed ? t("status_armed") : t("status_off"), snap.armed ? "#16a34a" : "#6b7280"),
-              badge(snap.mdMode === "fresh" ? t("status_fresh") : t("status_cached"), snap.mdMode === "fresh" ? "#0284c7" : "#d97706"),
-          ]}
-      </p>
-      {snap !== null && <div>
-        <div style={row}><span style={label}>{t("status_routes")}</span>{snap.routes.join(" / ") === "" ? "—" : snap.routes.join(" / ")}</div>
-        <div style={row}><span style={label}>{t("status_prompt")}</span><code>{snap.promptPath}</code></div>
-        <div style={row}><span style={label}>{t("status_readonly")}</span>{snap.readonlyCount}</div>
-        <div style={row}><span style={label}>{t("status_stats")}</span>
-          {t("status_stats_row", snap.stats as unknown as Record<string, unknown>)}</div>
-        <h4>{t("status_recent")}</h4>
-        {snap.recent.length === 0
-          ? <p style={{ opacity: 0.65 }}>{t("status_empty")}</p>
-          : [...snap.recent].reverse().map((r) => (
-            <div key={r.ts + r.tool} style={{ fontFamily: "monospace", fontSize: 12 }}>
-              <strong style={{ color: VERDICT_COLOR[r.verdict] ?? "#666" }}>{r.verdict}</strong>
-              {"\u00a0\u00a0"}{r.tool.padEnd(15)}{new Date(r.ts).toLocaleTimeString()}{"\u00a0·\u00a0"}{r.ms}ms
-            </div>))}
-      </div>}
+    <div>
+      <div className="ag-row">
+        <div className="ag-rowText">
+          <div className="ag-rowTitle">{t("status_title")}</div>
+          <div className="ag-rowDesc">
+            {offline && <span className="ag-chip ag-chip-gray">{t("status_off")}</span>}
+            {!offline && snap !== null && (
+              <>
+                <span className={`ag-chip ${snap.armed ? "ag-chip-green" : "ag-chip-gray"}`}>{snap.armed ? t("status_armed") : t("status_off")}</span>
+                <span className={`ag-chip ${snap.mdMode === "fresh" ? "ag-chip-blue" : "ag-chip-amber"}`}>{snap.mdMode === "fresh" ? t("status_fresh") : t("status_cached")}</span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+      {snap !== null && (
+        <>
+          <div className="ag-row">
+            <div className="ag-rowText">
+              <div className="ag-rowTitle">{t("status_stats")}</div>
+              <div className="ag-rowDesc">{t("status_stats_row", { ...snap.stats, exhausted: snap.stats.chainExhausted })}</div>
+            </div>
+          </div>
+          <div className="ag-row">
+            <div className="ag-rowText">
+              <div className="ag-rowTitle">{t("status_recent")}</div>
+              {snap.recent.length === 0 && <div className="ag-rowDesc">{t("status_empty")}</div>}
+              {[...snap.recent].reverse().map((r) => (
+                <div key={r.ts + r.tool} className="ag-verdict">
+                  <strong className={CHIP_CLASS[r.verdict] ?? ""}>{r.verdict}</strong>
+                  {"\u00a0\u00a0"}{r.tool.padEnd(15)}{new Date(r.ts).toLocaleTimeString()}{"\u00a0·\u00a0"}{r.ms}ms
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
-function ConfigCard(props: { t: GuideSectionInjected["t"]; form: LiveForm | null; onChange: (f: LiveForm) => void }) {
+function CfgRow(props: { label: string; hint?: string; control: React.ReactNode }) {
+  return (
+    <div className="ag-row">
+      <div className="ag-rowText">
+        <div className="ag-rowTitle">{props.label}</div>
+        {props.hint !== undefined && <div className="ag-rowDesc">{props.hint}</div>}
+      </div>
+      {props.control}
+    </div>
+  );
+}
+
+function ConfigCard(props: { t: TFn; form: LiveForm | null; onChange: (f: LiveForm) => void }) {
   const { t, form } = props;
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState<"idle" | "ok" | "err">("idle");
@@ -90,46 +107,31 @@ function ConfigCard(props: { t: GuideSectionInjected["t"]; form: LiveForm | null
       .catch(() => { setSaving(false); setResult("err"); });
   }, [form]);
   if (form === null) return null;
-  const set = (patch: Partial<LiveForm>): void => props.onChange({ ...form, ...patch });
-  const setRoute = (key: "routePrimary" | "routeBackup", k: "provider" | "model", v: string): void =>
-    set({ [key]: { ...form[key], [k]: v } });
-  const routePair = (key: "routePrimary" | "routeBackup", titleKey: "config_route_primary" | "config_route_backup"): React.ReactNode => (
-    <div style={row}>
-      <span style={label}>{t(titleKey)}</span>
-      <input style={{ ...input, width: 180 }} value={form[key].provider} placeholder="provider"
-        onChange={(e) => setRoute(key, "provider", e.currentTarget.value)} />
-      {"\u00a0"}
-      <input style={{ ...input, width: 220 }} value={form[key].model} placeholder="model"
-        onChange={(e) => setRoute(key, "model", e.currentTarget.value)} />
-    </div>);
+  const set = (patch: Partial<LiveForm>): void => { setResult("idle"); props.onChange({ ...form, ...patch }); };
+  const pair = (key: "routePrimary" | "routeBackup", label: string, hint?: string): React.ReactNode => (
+    <CfgRow label={label} hint={hint} control={
+      <span style={{ display: "inline-flex", gap: 8 }}>
+        <input className="ag-input ag-input-md" value={form[key].provider} placeholder="provider" onChange={(e) => set({ [key]: { ...form[key], provider: e.currentTarget.value } })} />
+        <input className="ag-input ag-input-md" value={form[key].model} placeholder="model" onChange={(e) => set({ [key]: { ...form[key], model: e.currentTarget.value } })} />
+      </span>} />
+  );
   return (
-    <div style={card}>
-      <h3>{t("config_title")}</h3>
-      <div style={row}>
-        <span style={label}>{t("config_enabled")}</span>
-        <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />
+    <div>
+      <CfgRow label={t("config_title")} hint={t("config_note")} control={null} />
+      <CfgRow label={t("config_enabled")} control={<input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />} />
+      <CfgRow label={t("config_promptPath")} control={<input className="ag-input ag-input-wide" value={form.promptPath} placeholder="/abs/path/to/rules.md" onChange={(e) => set({ promptPath: e.currentTarget.value })} />} />
+      {pair("routePrimary", t("config_route_primary"))}
+      {pair("routeBackup", t("config_route_backup"))}
+      <CfgRow label={t("config_timeout")} control={<input type="number" className="ag-input" style={{ minWidth: 140 }} value={form.perAttemptTimeoutMs} onChange={(e) => set({ perAttemptTimeoutMs: Number(e.currentTarget.value) || 30000 })} />} />
+      <CfgRow label={t("config_effort")} control={<input className="ag-input ag-input-md" value={form.reasoningEffort} placeholder="low / medium / high" onChange={(e) => set({ reasoningEffort: e.currentTarget.value })} />} />
+      <div className="ag-row">
+        <div className="ag-rowText" />
+        <span style={{ display: "inline-flex", gap: 10, alignItems: "center" }}>
+          <button type="button" className="ag-btn" disabled={saving} onClick={save}>{saving ? t("config_saving") : t("config_save")}</button>
+          {result === "ok" && <span className="ag-chip ag-chip-green">{t("config_saved")}</span>}
+          {result === "err" && <span className="ag-chip ag-chip-amber">{t("config_save_err")}</span>}
+        </span>
       </div>
-      <div style={row}>
-        <span style={label}>{t("config_promptPath")}</span>
-        <input style={input} value={form.promptPath} placeholder="/abs/path/to/rules.md"
-          onChange={(e) => set({ promptPath: e.currentTarget.value })} />
-      </div>
-      {routePair("routePrimary", "config_route_primary")}
-      {routePair("routeBackup", "config_route_backup")}
-      <div style={row}>
-        <span style={label}>{t("config_timeout")}</span>
-        <input type="number" style={{ ...input, width: 120 }} value={form.perAttemptTimeoutMs}
-          onChange={(e) => set({ perAttemptTimeoutMs: Number(e.currentTarget.value) || 30000 })} />
-      </div>
-      <div style={row}>
-        <span style={label}>{t("config_effort")}</span>
-        <input style={{ ...input, width: 160 }} value={form.reasoningEffort} placeholder="low / medium / high"
-          onChange={(e) => set({ reasoningEffort: e.currentTarget.value })} />
-      </div>
-      <button type="button" disabled={saving} onClick={save}>{saving ? t("config_saving") : t("config_save")}</button>
-      {"\u00a0"}{result === "ok" && <span style={{ color: "#16a34a" }}>{t("config_saved")}</span>}
-      {result === "err" && <span style={{ color: "#dc2626" }}>{t("config_save_err")}</span>}
-      <p style={{ opacity: 0.65, marginTop: 8 }}>{t("config_note")}</p>
     </div>
   );
 }
@@ -139,9 +141,9 @@ export function GuideSection(props: GuideSectionInjected & { close: () => void }
   const { t } = props;
   const [form, setForm] = useState<LiveForm | null>(null);
   return (
-    <div>
-      <h1>{t("title")}</h1>
-      <p>{t("subtitle")}</p>
+    <div className="ag-section">
+      <h2 className="ag-title">{t("title")}</h2>
+      <p className="ag-muted">{t("subtitle")}</p>
       <StatusCard t={t} onConfig={setForm} />
       <ConfigCard t={t} form={form} onChange={setForm} />
     </div>
