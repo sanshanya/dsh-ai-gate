@@ -85,7 +85,7 @@ function ConfigCard(props: { t: GuideSectionInjected["t"]; form: LiveForm | null
   const save = useCallback(() => {
     if (form === null) return;
     setSaving(true);
-    fetch("/ai-gate/config.json", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) })
+    fetch("/ai-gate/config.json", { method: "POST", headers: { "content-type": "application/json", "x-ai-gate-admin": "true" }, body: JSON.stringify(form) })
       .then((r) => { setSaving(false); setResult(r.ok ? "ok" : "err"); })
       .catch(() => { setSaving(false); setResult("err"); });
   }, [form]);

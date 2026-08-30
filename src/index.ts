@@ -261,7 +261,9 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
           handler(req: unknown, res: unknown) {
             const rq = req as { method: string };
             const r = res as { writeHead(code: number, headers: Record<string, string>): void; end(body: string): void };
-            if (rq.method !== "POST") { r.writeHead(405, {}); r.end("{}"); return; }
+            // CSRF 闸位：浏览器 form/JS 跨源带不了自定义头；诚实的威胁面见 README「配置写面」一节。
+            const hdr = (req as { headers?: Record<string, unknown> }).headers?.["x-ai-gate-admin"];
+            if (rq.method !== "POST" || hdr !== "true") { r.writeHead(403, {}); r.end('{"ok":false,"error":"x-ai-gate-admin required"}'); return; }
             let raw = "";
             (req as { on(ev: string, cb: (c: unknown) => void): void }).on("data", (chunk) => { raw += String(chunk); });
             (req as { on(ev: string, cb: (c?: unknown) => void): void }).on("end", () => {
