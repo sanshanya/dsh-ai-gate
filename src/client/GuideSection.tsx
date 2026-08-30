@@ -74,8 +74,9 @@ function StatusCard({ t }: { t: TFn }) {
   )
 }
 
-export function GuideSection(props: { inject: GuideSectionInjected; close: () => void }) {
-  const { t } = props.inject
+export function GuideSection(props: GuideSectionInjected & { close: () => void }) {
+  // 渲染面实证（scoped-slots.tsx:499）：inject 记录**平铺**进 props——本组件收 {t, close}，不是 {inject:{t}}。
+  const { t } = props
   const mdExample = `# 生产集群不可动
 任何会影响 kubectl / cn-prod-1 生产集群的写、删、改操作一律禁止；只读查看放行。
 
