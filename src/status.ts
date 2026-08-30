@@ -39,6 +39,13 @@ export class GateStatus {
   setMdMode(mode: "fresh" | "cached"): void {
     this.snap.mdMode = mode;
   }
+  /** v0.5 活配置：面板改了配置，快照即跟上。 */
+  update(next: { promptPath?: string; routes?: string[]; armed?: boolean }): void {
+    if (next.promptPath !== undefined) this.snap.promptPath = next.promptPath;
+    if (next.routes !== undefined) this.snap.routes = next.routes;
+    if (next.armed !== undefined) this.snap.armed = next.armed;
+  }
+
 
   record(tool: string, verdict: "allow" | "deny" | "ask" | "chain_exhausted", ms: number): void {
     const s = this.snap.stats;

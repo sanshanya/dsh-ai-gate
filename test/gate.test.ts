@@ -131,12 +131,15 @@ test("T7 abort 直通零调用", async () => {
   assert.equal((llm as { calls: unknown[] }).calls.length, 0);
 });
 
-test("T8 boot 缺 md 不武装", async () => {
+test("T8 缺 md（无缓存份）：挂闸但呼叫位直过（v0.5 语义）", async () => {
   const llm = fakeLlm([]);
   const { ctx, lines, listeners } = makeCtx(llm);
   await apply(ctx as never, { promptPath: "/no/such/rules.md", route: { primary: { provider: "p1", model: "m1" } } }, { llm: llm as never });
-  assert.equal(listeners.length, 0);
-  assert.ok(lines.some((l) => l.includes("禁令书读不到")));
+  assert.equal(listeners.length, 1, "v0.5：listener 恒挂，armed 是呼叫位判断");
+  const d = await listeners[0]!.fn(exec("bash", { command: "rm -rf /protected" }), next);
+  assert.equal(d?.kind, "allow", "缺 md 且无内存份=直过");
+  assert.equal((llm as { calls: unknown[] }).calls.length, 0, "零评审");
+  assert.ok(lines.some((l) => l.includes("禁令书读不到且无内存份")));
 });
 
 test("T10 惰验三面：直过+warn 去重", async () => {

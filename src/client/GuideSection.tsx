@@ -1,116 +1,149 @@
-/**
- * v0.3 面板：运行状态（fetch /ai-gate/status.json 轮询；recent 无命令文本——host 侧安全钉）
- * + 用法面（md 禁令书+三项配置）+ 诚实位。无服务面，零依赖宿主目录。
- */
-import { useEffect, useState } from 'react'
-import type { TFn } from './locales.ts'
-
+/** AI 门禁设置节（v0.5 用户定裁：面板=活配置面，说明书去 README）：状态卡 + 可写配置表单。 */
+import { useCallback, useEffect, useState } from "react";
+import type { TFn } from "./locales.ts";
 export interface GuideSectionInjected { t: TFn }
 
-interface StatusSnap {
-  armed: boolean
-  promptPath: string
-  routes: string[]
-  readonlyCount: number
-  mdMode: 'fresh' | 'cached'
-  stats: { reviewed: number; allowed: number; denied: number; asked: number; chainExhausted: number }
-  recent: Array<{ ts: string; tool: string; verdict: string; ms: number }>
+interface Snapshot {
+  armed: boolean;
+  mdMode: "fresh" | "cached";
+  routes: string[];
+  promptPath: string;
+  readonlyCount: number;
+  stats: { reviewed: number; allowed: number; denied: number; asked: number; chainExhausted: number };
+  recent: Array<{ ts: string; tool: string; verdict: string; ms: number }>;
+  config?: LiveForm;
+}
+interface LiveForm {
+  enabled: boolean;
+  promptPath: string;
+  routePrimary: { provider: string; model: string };
+  routeBackup: { provider: string; model: string };
+  perAttemptTimeoutMs: number;
+  reasoningEffort: string;
 }
 
-const card: React.CSSProperties = { padding: '16px 18px', borderRadius: 10, border: '1px solid #e5e7eb', marginBottom: 12 }
-const mono: React.CSSProperties = { fontFamily: 'ui-monospace, SFMono-Regular, monospace', background: '#f4f5f7', padding: '10px 12px', borderRadius: 8, fontSize: 12, whiteSpace: 'pre-wrap', overflowX: 'auto' }
-const li: React.CSSProperties = { marginBottom: 6 }
-const badge = (color: string): React.CSSProperties => ({ display: 'inline-block', padding: '2px 10px', borderRadius: 999, background: color, color: '#fff', fontSize: 12, marginRight: 8 })
 
-const VERDICT_COLOR: Record<string, string> = { allow: '#16a34a', deny: '#dc2626', ask: '#d97706', chain_exhausted: '#7c3aed' }
+const row: React.CSSProperties = { marginBottom: 8 };
+const label: React.CSSProperties = { display: "inline-block", minWidth: 120, fontWeight: 600 };
+const input: React.CSSProperties = { width: 420, maxWidth: "60%" };
+const card: React.CSSProperties = { border: "1px solid rgba(128,128,128,.35)", borderRadius: 8, padding: 16, marginTop: 16 };
+const VERDICT_COLOR: Record<string, string> = { allow: "#16a34a", deny: "#dc2626", ask: "#d97706", chain_exhausted: "#7c3aed" };
 
-function StatusCard({ t }: { t: TFn }) {
-  const [snap, setSnap] = useState<StatusSnap | null>(null)
-  const [offline, setOffline] = useState(false)
+function StatusCard(props: { t: GuideSectionInjected["t"]; onConfig: (c: LiveForm) => void }) {
+  const { t } = props;
+  const [snap, setSnap] = useState<Snapshot | null>(null);
+  const [offline, setOffline] = useState(false);
   useEffect(() => {
-    let alive = true
-    const pull = async () => {
-      try {
-        const r = await fetch('/ai-gate/status.json', { cache: 'no-store' })
-        if (!r.ok) throw new Error(String(r.status))
-        const j = (await r.json()) as StatusSnap
-        if (alive) { setSnap(j); setOffline(false) }
-      } catch {
-        if (alive) { setSnap(null); setOffline(true) }
-      }
-    }
-    void pull()
-    const id = setInterval(() => { void pull() }, 5000)
-    return () => { alive = false; clearInterval(id) }
-  }, [])
-  if (offline) return <div style={card}><h3 style={{ marginTop: 0 }}>{t('status_title')}</h3><p style={{ color: '#b45309' }}>{t('status_off')}</p></div>
-  if (snap === null) return null
+    let live = true;
+    const pull = (): void => {
+      fetch("/ai-gate/status.json", { cache: "no-store" })
+        .then((r) => r.json())
+        .then((s: Snapshot) => { if (!live) return; setOffline(false); setSnap(s); if (s.config !== undefined) props.onConfig(s.config); })
+        .catch(() => { if (live) setOffline(true); });
+    };
+    pull();
+    const timer = setInterval(pull, 5000);
+    return () => { live = false; clearInterval(timer); };
+  }, []);
+  if (snap === null && !offline) return null;
+  const badge = (text: string, color: string): React.ReactNode =>
+    <span key={text} style={{ background: color, color: "#fff", borderRadius: 10, padding: "2px 10px", fontSize: 12, marginRight: 6 }}>{text}</span>;
   return (
     <div style={card}>
-      <h3 style={{ marginTop: 0 }}>{t('status_title')}</h3>
+      <h3>{t("status_title")}</h3>
       <p>
-        <span style={badge(snap.armed ? '#16a34a' : '#6b7280')}>{snap.armed ? t('status_armed') : 'OFF'}</span>
-        <span style={badge(snap.mdMode === 'fresh' ? '#0ea5e9' : '#d97706')}>{snap.mdMode === 'fresh' ? t('status_fresh') : t('status_cached')}</span>
+        {offline
+          ? badge(t("status_off"), "#6b7280")
+          : snap !== null && [
+              badge(snap.armed ? t("status_armed") : t("status_off"), snap.armed ? "#16a34a" : "#6b7280"),
+              badge(snap.mdMode === "fresh" ? t("status_fresh") : t("status_cached"), snap.mdMode === "fresh" ? "#0284c7" : "#d97706"),
+          ]}
       </p>
-      <p style={li}><b>{t('status_routes')}</b>：{snap.routes.join('  →  ') || '—'}</p>
-      <p style={li}><b>{t('status_prompt')}</b>：<code>{snap.promptPath}</code></p>
-      <p style={li}><b>{t('status_readonly')}</b>：{snap.readonlyCount} 件</p>
-      <p style={li}><b>{t('status_stats')}</b>：
-        审 {snap.stats.reviewed} · 放 {snap.stats.allowed} · 杀 {snap.stats.denied} · 卡 {snap.stats.asked} · 灭链 {snap.stats.chainExhausted}
-      </p>
-      <p style={{ marginBottom: 4 }}><b>{t('status_recent')}</b></p>
-      {snap.recent.length === 0 ? <p style={{ color: '#888' }}>{t('status_empty')}</p> : (
-        <div style={mono}>
-          {[...snap.recent].reverse().map((r, i) => (
-            <div key={i}>
-              <span style={{ color: VERDICT_COLOR[r.verdict] ?? '#555', fontWeight: 600 }}>{r.verdict.padEnd(15)}</span>
-              <span>{r.tool.padEnd(10)}</span>
-              <span style={{ color: '#888' }}>{r.ts.slice(11, 19)} · {r.ms}ms</span>
-            </div>
-          ))}
-        </div>
-      )}
+      {snap !== null && <div>
+        <div style={row}><span style={label}>{t("status_routes")}</span>{snap.routes.join(" / ") === "" ? "—" : snap.routes.join(" / ")}</div>
+        <div style={row}><span style={label}>{t("status_prompt")}</span><code>{snap.promptPath}</code></div>
+        <div style={row}><span style={label}>{t("status_readonly")}</span>{snap.readonlyCount}</div>
+        <div style={row}><span style={label}>{t("status_stats")}</span>
+          {`审 ${snap.stats.reviewed} · 放 ${snap.stats.allowed} · 杀 ${snap.stats.denied} · 卡 ${snap.stats.asked} · 灭 ${snap.stats.chainExhausted}`}</div>
+        <h4>{t("status_recent")}</h4>
+        {snap.recent.length === 0
+          ? <p style={{ opacity: 0.65 }}>{t("status_empty")}</p>
+          : [...snap.recent].reverse().map((r) => (
+            <div key={r.ts + r.tool} style={{ fontFamily: "monospace", fontSize: 12 }}>
+              <strong style={{ color: VERDICT_COLOR[r.verdict] ?? "#666" }}>{r.verdict}</strong>
+              {"\u00a0\u00a0"}{r.tool.padEnd(15)}{new Date(r.ts).toLocaleTimeString()}{"\u00a0·\u00a0"}{r.ms}ms
+            </div>))}
+      </div>}
     </div>
-  )
+  );
+}
+
+function ConfigCard(props: { t: GuideSectionInjected["t"]; form: LiveForm | null; onChange: (f: LiveForm) => void }) {
+  const { t, form } = props;
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<"idle" | "ok" | "err">("idle");
+  const save = useCallback(() => {
+    if (form === null) return;
+    setSaving(true);
+    fetch("/ai-gate/config.json", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(form) })
+      .then((r) => { setSaving(false); setResult(r.ok ? "ok" : "err"); })
+      .catch(() => { setSaving(false); setResult("err"); });
+  }, [form]);
+  if (form === null) return null;
+  const set = (patch: Partial<LiveForm>): void => props.onChange({ ...form, ...patch });
+  const setRoute = (key: "routePrimary" | "routeBackup", k: "provider" | "model", v: string): void =>
+    set({ [key]: { ...form[key], [k]: v } });
+  const routePair = (key: "routePrimary" | "routeBackup", titleKey: "config_route_primary" | "config_route_backup"): React.ReactNode => (
+    <div style={row}>
+      <span style={label}>{t(titleKey)}</span>
+      <input style={{ ...input, width: 180 }} value={form[key].provider} placeholder="provider"
+        onChange={(e) => setRoute(key, "provider", e.currentTarget.value)} />
+      {"\u00a0"}
+      <input style={{ ...input, width: 220 }} value={form[key].model} placeholder="model"
+        onChange={(e) => setRoute(key, "model", e.currentTarget.value)} />
+    </div>);
+  return (
+    <div style={card}>
+      <h3>{t("config_title")}</h3>
+      <div style={row}>
+        <span style={label}>{t("config_enabled")}</span>
+        <input type="checkbox" checked={form.enabled} onChange={(e) => set({ enabled: e.currentTarget.checked })} />
+      </div>
+      <div style={row}>
+        <span style={label}>{t("config_promptPath")}</span>
+        <input style={input} value={form.promptPath} placeholder="/abs/path/to/rules.md"
+          onChange={(e) => set({ promptPath: e.currentTarget.value })} />
+      </div>
+      {routePair("routePrimary", "config_route_primary")}
+      {routePair("routeBackup", "config_route_backup")}
+      <div style={row}>
+        <span style={label}>{t("config_timeout")}</span>
+        <input type="number" style={{ ...input, width: 120 }} value={form.perAttemptTimeoutMs}
+          onChange={(e) => set({ perAttemptTimeoutMs: Number(e.currentTarget.value) || 30000 })} />
+      </div>
+      <div style={row}>
+        <span style={label}>{t("config_effort")}</span>
+        <input style={{ ...input, width: 160 }} value={form.reasoningEffort} placeholder="low / medium / high"
+          onChange={(e) => set({ reasoningEffort: e.currentTarget.value })} />
+      </div>
+      <button type="button" disabled={saving} onClick={save}>{saving ? t("config_saving") : t("config_save")}</button>
+      {"\u00a0"}{result === "ok" && <span style={{ color: "#16a34a" }}>{t("config_saved")}</span>}
+      {result === "err" && <span style={{ color: "#dc2626" }}>{t("config_save_err")}</span>}
+      <p style={{ opacity: 0.65, marginTop: 8 }}>{t("config_note")}</p>
+    </div>
+  );
 }
 
 export function GuideSection(props: GuideSectionInjected & { close: () => void }) {
   // 渲染面实证（scoped-slots.tsx:499）：inject 记录**平铺**进 props——本组件收 {t, close}，不是 {inject:{t}}。
-  const { t } = props
-  const mdExample = `# 生产集群不可动
-任何会影响 kubectl / cn-prod-1 生产集群的写、删、改操作一律禁止；只读查看放行。
-
-# 密钥目录不可动
-/protected/ 与 /etc/secrets/ 下的任何写、删、改权限动作一律禁止；读取放行。`
-  const cfgExample = `{
-  "promptPath": "${'~/.dsh/profiles/<你的profile>/ai-gate-rules.md'}",
-  "route": {
-    "primary": { "provider": "<你的 provider>", "model": "<轻量快模型>" },
-    "backup":  { "provider": "<备用 provider>", "model": "<备用模型>" }
-  }
-}`
+  const { t } = props;
+  const [form, setForm] = useState<LiveForm | null>(null);
   return (
-    <div style={{ maxWidth: 720, padding: 16 }}>
-      <h2 style={{ marginTop: 0 }}>{t('title')}</h2>
-      <p style={{ color: '#555', lineHeight: 1.7 }}>{t('subtitle')}</p>
-      <StatusCard t={t} />
-      <div style={card}>
-        <h3 style={{ marginTop: 0 }}>{t('usage_title')}</h3>
-        <p>{t('usage_md')}</p>
-        <pre style={mono}>{mdExample}</pre>
-        <p>{t('usage_cfg_label')}</p>
-        <pre style={mono}>{cfgExample}</pre>
-        <p style={{ color: '#666' }}>{t('usage_two_cards')}</p>
-      </div>
-      <div style={card}>
-        <h3 style={{ marginTop: 0 }}>{t('honesty_title')}</h3>
-        <ul style={{ paddingLeft: 18, marginBottom: 6 }}>
-          <li style={li}>{t('honesty_li1')}</li>
-          <li style={li}>{t('honesty_li2')}</li>
-          <li style={li}>{t('honesty_li3')}</li>
-          <li style={li}>{t('honesty_li4')}</li>
-        </ul>
-      </div>
+    <div>
+      <h1>{t("title")}</h1>
+      <p>{t("subtitle")}</p>
+      <StatusCard t={t} onConfig={setForm} />
+      <ConfigCard t={t} form={form} onChange={setForm} />
     </div>
-  )
+  );
 }
