@@ -63,7 +63,8 @@
     "budget": "node scripts/token-budget.mjs",
     "survey": "node scripts/token-survey.mjs",
     "verify:pack": "node scripts/verify-pack.mjs",
-    "build:client": "node scripts/build-client.mjs"
+    "build:client": "node scripts/build-client.mjs",
+    "smoke": "node scripts/smoke.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

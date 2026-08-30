@@ -41,6 +41,14 @@ export const REVIEW_INSTRUCTION_TAIL = [
 ].join("\n");
 
 /** system = md 原文整段 + 裁决尾。 */
+/** PB2-★3：载荷头尾截断硬顶（中段截走去注记——评审明知被截；禁令锚点长载中段的遗漏面照实挂账）。 */
+export function capToolArguments(raw: string, head = 2000, tail = 1000): string {
+  if (raw.length <= head + tail) return raw;
+  return `${raw.slice(0, head)}
+…[TRUNCATED 中间被截：原长 ${raw.length} 字符，审前看头 ${head}+尾 ${tail}，须当段内可能漏>]
+${raw.slice(-tail)}`;
+}
+
 export function buildReviewSystem(policyMd: string): string {
   return `${policyMd}\n\n${REVIEW_INSTRUCTION_TAIL}`;
 }

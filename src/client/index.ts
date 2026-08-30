@@ -31,9 +31,11 @@ export function apply(ctx: ClientShim): void {
   }, GuideSection))
   // W7：conversation.approval.detail 单槽——priority -1 稳压 ui-chat ApprovalCommand（未配 priority=0、注册稳定序）；
   // 判不出的审批回退到原装行为（命令文本）——不偷别人地盘。
+  // W-merge：detail 件要 t——把 injectFace 也接给 detail 槽（locale 绑已封包）。
   ctx.slots.inject('conversation.approval.detail', () => ctx.slots.register({
     name: 'conversation.approval.detail',
     priority: -1,
+    inject: () => ({ t }),
   }, GateApprovalDetail))
 }
 

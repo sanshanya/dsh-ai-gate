@@ -29,6 +29,14 @@ export type AIGateKey =
   | 'config_saved'
   | 'config_save_err'
   | 'config_note'
+  | 'status_stats_row'
+  | 'detail_title'
+  | 'detail_branch_ai'
+  | 'detail_branch_chain'
+  | 'detail_judgment'
+  | 'detail_tool'
+  | 'detail_cwd'
+  | 'detail_command'
 
 type Dict = Record<AIGateKey, string>
 
@@ -59,6 +67,14 @@ export const zh: Dict = {
   config_saved: '已保存生效',
   config_save_err: '保存失败（host 拒绝了本次写）',
   config_note: 'promptPath/provider/model 不合法=闸停直过不是卡（直过+boot 行明示，不弹第三张卡）。说明书见 README。',
+  status_stats_row: '审 {reviewed} · 放 {allowed} · 杀 {denied} · 卡 {asked} · 灭 {exhausted}',
+  detail_title: 'AI GATE 裁决详情',
+  detail_branch_ai: '分支：AI 判不准',
+  detail_branch_chain: '分支：评审链全灭兜底',
+  detail_judgment: '判词',
+  detail_tool: '工具',
+  detail_cwd: 'cwd',
+  detail_command: '命令',
 }
 
 export const en: Dict = {
@@ -87,7 +103,15 @@ export const en: Dict = {
   config_saving: 'Saving…',
   config_saved: 'Saved & live',
   config_save_err: 'Save failed (host rejected the write)',
-  config_note: 'Bad path/provider/model = gate openly off (line printed), never a third card. Manual lives in the README.',
+  config_note: 'Bad path/provider/model = gate openly off (line printed), never another card. Manual lives in the README.',
+  status_stats_row: 'reviewed {reviewed} · allowed {allowed} · denied {denied} · asked {asked} · chain-dead {exhausted}',
+  detail_title: 'AI GATE verdict detail',
+  detail_branch_ai: 'Branch: AI uncertain',
+  detail_branch_chain: 'Branch: review chain exhausted',
+  detail_judgment: 'Judgment',
+  detail_tool: 'Tool',
+  detail_cwd: 'cwd',
+  detail_command: 'Command',
 }
 
 export type TFn = (key: AIGateKey, params?: Record<string, unknown>) => string

@@ -64,7 +64,7 @@ function StatusCard(props: { t: GuideSectionInjected["t"]; onConfig: (c: LiveFor
         <div style={row}><span style={label}>{t("status_prompt")}</span><code>{snap.promptPath}</code></div>
         <div style={row}><span style={label}>{t("status_readonly")}</span>{snap.readonlyCount}</div>
         <div style={row}><span style={label}>{t("status_stats")}</span>
-          {`审 ${snap.stats.reviewed} · 放 ${snap.stats.allowed} · 杀 ${snap.stats.denied} · 卡 ${snap.stats.asked} · 灭 ${snap.stats.chainExhausted}`}</div>
+          {t("status_stats_row", snap.stats as unknown as Record<string, unknown>)}</div>
         <h4>{t("status_recent")}</h4>
         {snap.recent.length === 0
           ? <p style={{ opacity: 0.65 }}>{t("status_empty")}</p>

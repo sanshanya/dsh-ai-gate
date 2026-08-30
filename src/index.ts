@@ -16,6 +16,7 @@ import { makeForensic, decisionLine } from "./forensic.ts";
 import { GateStatus, STATUS_ROUTE_PATH } from "./status.ts";
 import {
   buildReviewSystem,
+  capToolArguments,
   reviewWithChain,
   type AttemptRec,
   type ReviewDeps,
@@ -153,20 +154,23 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
     perAttemptTimeoutMs: config?.perAttemptTimeoutMs ?? 30000,
     reasoningEffort: config?.reasoningEffort ?? "",
   };
-  // settings 在即动态源（基面板 base+workspace 用户层覆写）；不在（假 ctx/旧面）= 静态 base。
+  // settings 在即动态源（行 config=base、workspace 用户层覆写、watch 即生效）；fake ctx=静态 base。
   let live: LiveConfig = entry;
   let scope: SettingsScopeFace<LiveConfig> | undefined;
   try {
     const inj = (ctx as unknown as { inject?: unknown }).inject;
     if (typeof inj === "function") {
-      installSettingsSection(ctx, SETTINGS_NS, settingsSchema, entry as never, {
-        setSource: (current: () => LiveConfig) => { live = current(); },
-        onChange: () => { forensic.line(`[ai-gate] 设置变更已生效：prompt=${live.promptPath === "" ? "（空·闸停）" : live.promptPath} primary=${live.routePrimary.provider}/${live.routePrimary.model}`); },
-      } as never);
-      (inj as (names: string[], fn: (sc: unknown) => void) => void).call(
-        ctx, ["settings"],
-        (sc: unknown) => { scope = (sc as { settings: unknown }).settings as unknown as SettingsScopeFace<LiveConfig>; },
-      );
+      (inj as (names: string[], fn: (sc: unknown) => void) => void).call(ctx, ["settings"], (sc: unknown) => {
+        const provider = (sc as { settings: { register(ns: unknown, schema: unknown, opts: { base: LiveConfig }): SettingsScopeFace<LiveConfig> } }).settings;
+        const bound = provider.register(SETTINGS_NS, settingsSchema as object, { base: entry });
+        scope = bound;
+        live = bound.get();
+        bound.watch((nextVal: LiveConfig) => {
+          live = nextVal;
+          forensic.line(`[ai-gate] 设置变更已生效：prompt=${live.promptPath === "" ? "（空·闸停）" : live.promptPath} primary=${live.routePrimary.provider}/${live.routePrimary.model}`);
+        });
+        if (webServer !== undefined) bindWebRoutes(webServer); // inject 回调是位后——到位即补绑（幂等闸在下）
+      });
     }
   } catch {
     forensic.line("[ai-gate] settings 服务面缺席——用行配置作静态源（面板改不了，但闸照常）");
@@ -241,6 +245,8 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
   type WebServerFace = { register(route: { kind: "exact"; path: string; handler(req: unknown, res: unknown): void }): () => void };
   /** §4.6 同款教训：webServer 也得惰性——apply 位可能未上线（v0.5 实证）。 */
   let webServer: WebServerFace | undefined = ctx.get("webServer") as WebServerFace | undefined;
+  let baseBound = false;
+  let configBound = false;
   /** W7：pending callId→裁决payload（审批详情面板的数据源；10 分钟 TTL+200 顶）。 */
   const pendingVerdicts = new Map<string, { tool: string; raw: string; cwd: string; branch: string; judgment: string; expires: number }>();
   const rememberVerdict = (exec2: PreExecuteExec, raw2: string, cwd2: string, branch2: string, judgment2: string): void => {
@@ -250,6 +256,8 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
     if (pendingVerdicts.size > 200) { const first = pendingVerdicts.keys().next().value; if (first !== undefined) pendingVerdicts.delete(first); }
   };
   const bindWebRoutes = (ws: WebServerFace): void => {
+    if (baseBound) { if (scope !== undefined && !configBound) bindConfigRoute(ws); return; }
+    baseBound = true;
     ctx.effect(
       () => ws.register({
         kind: "exact",
@@ -284,8 +292,13 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
       }),
       "ai-gate: status route",
     );
-    if (scope !== undefined) {
-      const liveScope = scope;
+    if (scope !== undefined) bindConfigRoute(ws);
+  };
+  const bindConfigRoute = (ws: WebServerFace): void => {
+    if (configBound) return;
+    configBound = true;
+    const liveScope = scope!;
+    if (liveScope !== undefined) {
       ctx.effect(
         () => ws.register({
           kind: "exact",
@@ -357,7 +370,7 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
       const args = (exec.arguments ?? {}) as Record<string, unknown>;
       // RA-M1：cwd 只取 args.workdir（exec 无 cwd 实体）。
       const cwd = typeof args.workdir === "string" && args.workdir !== "" ? args.workdir : "(未声明)";
-      const rawCmd = typeof args.command === "string" ? args.command : JSON.stringify(args);
+      const rawCmd = capToolArguments(typeof args.command === "string" ? args.command : JSON.stringify(args));
       const head = `${toolName}:${rawCmd.length > 80 ? `${rawCmd.slice(0, 80)}…` : rawCmd}`;
 
       // RA-B1：每评读盘用新并刷新缓存；读不到用内存份续守——绝不直过。缓存按路径分档（面板换路径即重读）。

@@ -26,7 +26,7 @@ function CommandFallback({ callId, useChat }: { callId: string; useChat: UseChat
   return command ?? null;
 }
 
-export function GateApprovalDetail({ callId, useChat }: { callId: string; useChat: UseChat }) {
+export function GateApprovalDetail({ callId, useChat, t }: { callId: string; useChat: UseChat; t: (k: string) => string }) {
   const [payload, setPayload] = useState<DetailPayload | null | "miss">(null);
   useEffect(() => {
     let live = true;
@@ -37,7 +37,8 @@ export function GateApprovalDetail({ callId, useChat }: { callId: string; useCha
     return () => { live = false; };
   }, [callId]);
   if (payload === null) return null;
-  if (payload === "miss") return CommandFallback({ callId, useChat }) as unknown as React.ReactNode;
+  // PB2-★1：必须 JSX——函数调用=hooks 序违规，非本闸审批全崩。
+  if (payload === "miss") return <CommandFallback callId={callId} useChat={useChat} />;
   const chip = (text: string, color: string): React.ReactNode =>
     <span style={{ background: color, color: "#fff", borderRadius: 4, padding: "1px 8px", fontSize: 12 }}>{text}</span>;
   const kv = (k: string, v: React.ReactNode): React.ReactNode =>
@@ -48,13 +49,13 @@ export function GateApprovalDetail({ callId, useChat }: { callId: string; useCha
   return (
     <div style={{ fontSize: 13, lineHeight: 1.5, marginTop: 8, padding: "10px 12px", border: "1px solid rgba(128,128,128,.35)", borderRadius: 8 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <strong>AI GATE 裁决详情</strong>
-        {payload.branch === "ai_verdict" ? chip("分支：AI 判不准", "#d97706") : chip("分支：评审链全灭兜底", "#7c3aed")}
+        <strong>{t("detail_title")}</strong>
+        {payload.branch === "ai_verdict" ? chip(t("detail_branch_ai"), "#d97706") : chip(t("detail_branch_chain"), "#7c3aed")}
       </div>
-      {kv("判词", payload.judgment)}
-      {kv("工具", payload.tool)}
-      {kv("cwd", payload.cwd)}
-      {kv("命令", <code style={{ display: "block", whiteSpace: "pre-wrap", fontSize: 12 }}>{payload.raw}</code>)}
+      {kv(t("detail_judgment"), payload.judgment)}
+      {kv(t("detail_tool"), payload.tool)}
+      {kv(t("detail_cwd"), payload.cwd)}
+      {kv(t("detail_command"), <code style={{ display: "block", whiteSpace: "pre-wrap", fontSize: 12 }}>{payload.raw}</code>)}
     </div>
   );
 }
