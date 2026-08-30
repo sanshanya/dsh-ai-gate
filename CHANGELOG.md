@@ -1,5 +1,11 @@
 # Changelog
 
+## [unreleased] - 2026-08-30（减重第二波）
+
+- **真机 golden 退役至 git 史**（用户令）：test/integration+fixtures+test:integration 脚本+@deepseek-ai/dsh devDep 全删——T9 四例的真机结论已冻结于 docs/v0.3-rewrite-design.md §4.6，回归证明转由 17 枚单元金丝雀承托。
+- **README.zh.md 删**：EN 单语门面。
+
+
 Notable changes to dsh-ai-gate. Versions track published git tags (npm artifact when it ships).
 
 ## [0.3.0] - 2026-08-30（AI GATE 重写——用户亲定架构）

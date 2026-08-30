@@ -1,6 +1,0 @@
-# T9 真机 golden 的假审批答允行（只在测试 profile——生产面是 dsh 原生 answerer/UI）
-- insert:
-    - id: ai-gate-fake-answerer
-      name: 'ai-gate-fake-answerer'
-      disabled: false
-      config: {}

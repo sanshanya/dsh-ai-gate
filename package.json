@@ -37,7 +37,6 @@
     "lib/",
     "cordis.patch.yml",
     "README.md",
-    "README.zh.md",
     "CHANGELOG.md",
     "LICENSE"
   ],
@@ -64,8 +63,7 @@
     "budget": "node scripts/token-budget.mjs",
     "survey": "node scripts/token-survey.mjs",
     "verify:pack": "node scripts/verify-pack.mjs",
-    "build:client": "node scripts/build-client.mjs",
-    "test:integration": "node --test test/integration/*.test.ts"
+    "build:client": "node scripts/build-client.mjs"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
@@ -73,7 +71,6 @@
     "@deepseek-ai/schemastery": "^3.18.1"
   },
   "devDependencies": {
-    "@deepseek-ai/dsh": "^0.1.0-rc.6",
     "@types/node": "^24.0.0",
     "@types/react": "^19.2.18",
     "esbuild": "^0.28.2",

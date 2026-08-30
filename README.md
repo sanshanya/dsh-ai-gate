@@ -2,8 +2,6 @@
 
 **AI GATE — the last line of defense.** An isolated-context AI reviewer for every write-class / ambiguous tool call in DeepSeek Harness: the model reads YOUR natural-language policy markdown (verbatim, as its system prompt), and emits exactly one of three branches — **allow** (runs) / **deny** (killed, with a reason the agent can act on) / **ask** (routed to dsh's native approval card). No rule engine, no token filters, no dimensions — the AI is the gate.
 
-[中文](README.zh.md)
-
 ## Why
 
 `danger-full-access` opens every road; sandbox modes know *paths*, not *intent*. AI GATE stations a reviewer at the intent layer: plenty of operators have been burned by an agent — starved of context — violating a standing restriction. This is the backstop.
@@ -75,8 +73,8 @@ Every verdict is written to forensic (dsh log + stderr) with attempt ledgers; a 
 
     npm install              # pulls @deepseek-ai/dsh for the real-machine goldens
     npm run build            # lib/ + client bundle
-    npm test                 # unit goldens (17: review chain + gate face + status)
-    npm run test:integration # real dsh spawn goldens (4 cases; needs dsh bin + minutes)
+    npm test                 # 17 unit goldens (review chain + gate face + status)
+                             # (real-machine spawn golden lane retired to git history — see CHANGELOG)
 
 Design freeze (user-pinned architecture + RA/RB review waves): `docs/v0.3-rewrite-design.md`.
 
