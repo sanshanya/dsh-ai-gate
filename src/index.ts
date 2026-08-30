@@ -68,8 +68,8 @@ export const AI_GATE_MODE = "ai-gate";
 interface SessionsFoldFace {
   list(): Array<{ id: string; events: readonly SessionEvent[] }>;
 }
-function currentGatePreset(ctx: Context, agent: { sessionId?: string } | undefined): string | undefined {
-  const sid = agent?.sessionId;
+function currentGatePreset(ctx: Context, agent: { id?: string } | undefined): string | undefined {
+  const sid = agent?.id;
   if (sid === undefined) return undefined;
   const sessions = ctx.get("sessions") as SessionsFoldFace | undefined;
   if (!sessions) return undefined;
@@ -82,7 +82,7 @@ function currentGatePreset(ctx: Context, agent: { sessionId?: string } | undefin
   parent?: unknown;
   signal?: AbortSignal;
   /** 活会话身份（RB/T9：agent 与 session 同身份；模式折从这出）。 */
-  agent?: { sessionId?: string };
+  agent?: { id?: string }; // Agent 真合同（packages/core/agent/src/types.ts:12-15）：id=sessionId，无 sessionId 字段（RA 死刑勘正）
 }
 type PreExecuteDecision = { kind: "allow" } | { kind: "deny"; reason: string } | { kind: "ask"; reason: string };
 type Next = (decision?: PreExecuteDecision) => Promise<PreExecuteDecision>;
@@ -172,8 +172,8 @@ export async function apply(ctx: Context, config?: AiGateConfig, deps?: GateDeps
         if (webServer !== undefined) bindWebRoutes(webServer); // inject 回调是位后——到位即补绑（幂等闸在下）
       });
     }
-  } catch {
-    forensic.line("[ai-gate] settings 服务面缺席——用行配置作静态源（面板改不了，但闸照常）");
+  } catch (error) {
+    forensic.line(`[ai-gate] settings 绑定失败：${String(error instanceof Error ? error.message : error).slice(0, 120)}——本 mount 降级静态源（面板改不了，但闸照常；重绑属重复 mount 面）`);
   }
   const gateState = (): { armed: boolean; reason: string } => {
     if (!live.enabled) return { armed: false, reason: "开关关（面板/配置均可翻）" };

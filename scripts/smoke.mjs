@@ -55,6 +55,14 @@ if (noCsrf.status !== 403) fail(`写路无头不拒：${noCsrf.status}`);
 const detail = await fetch(`http://127.0.0.1:${PORT}/ai-gate/detail.json?callId=never`);
 if (detail.status !== 404) fail(`detail 未知 callId 非 404：${detail.status}`);
 
+// ⑦ 写路正写回环（settings 端到端，RA-3 死刑再焊）：带头 POST 翻关 → status 见关 → 翻回
+const on = await fetch(`http://127.0.0.1:${PORT}/ai-gate/config.json`, { method: "POST", headers: { "content-type": "application/json", "x-ai-gate-admin": "true" }, body: JSON.stringify({ enabled: false }) });
+if (on.status !== 200) fail(`写路正写拒：${on.status}`);
+const after = JSON.parse(await (await fetch(`http://127.0.0.1:${PORT}/ai-gate/status.json`, { headers: { accept: "application/json" } })).text());
+if (after.config?.enabled !== false) fail(`写后回读未翻：${JSON.stringify(after.config)}`);
+const back = await fetch(`http://127.0.0.1:${PORT}/ai-gate/config.json`, { method: "POST", headers: { "content-type": "application/json", "x-ai-gate-admin": "true" }, body: JSON.stringify({ enabled: true }) });
+if (back.status !== 200) fail(`写路翻回拒：${back.status}`);
+
 try { execFileSync("bash", ["-c", `lsof -ti tcp:${PORT} -sTCP:LISTEN | xargs kill -9`], { stdio: "ignore" }); } catch { child.kill("SIGKILL"); }
 rmSync(home, { recursive: true, force: true });
 console.log("smoke: 六断言全绿（armed/status/config写闸/detail/dump/presets）");

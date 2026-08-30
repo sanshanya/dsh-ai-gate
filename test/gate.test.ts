@@ -60,7 +60,7 @@ function fakeLlm(steps: Step[], providers: string[] = ["p1", "p2"]) {
 const next = async (d?: Decision): Promise<Decision> => d ?? { kind: "allow" };
 function exec(tool: string, args: Record<string, unknown>, extra: Record<string, unknown> = {}) {
   // 默认携带入模式 agent（与 DEFAULT_GATE_SESSIONS 对位）；冬眠面测试显式覆盖 sessions/agent。
-  return { name: tool, arguments: args, callId: "c-1", agent: { sessionId: "s-gate" }, ...extra };
+  return { name: tool, arguments: args, callId: "c-1", agent: { id: "s-gate" }, ...extra };
 }
 
 async function armed(llm: unknown, dirExtra = "") {
@@ -230,7 +230,7 @@ test("T12 嵌套直过只闸 root（RA-M5）", async () => {
 
 
 // T14-T16：v0.4 模式闸——AI GATE 是一种权限模式，不入模式=冬眠
-const GATE_AGENT = { sessionId: "s-gate" };
+const GATE_AGENT = { id: "s-gate" };
 function fakeSessions(preset?: string) {
   return {
     list() {
@@ -288,6 +288,24 @@ test("T16 sessions 缺席/无 agent：仍冬眠直过", async () => {
     const dA = await listener!.fn(exec("bash", { command: "rm -rf /protected" }, { agent: GATE_AGENT }), next);
     assert.equal(dA?.kind, "allow");
     assert.equal((llmA as { calls: unknown[] }).calls.length, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+
+test("T17 无 id 的 agent：sessions 在位仍冬眠（RA-1 对偶）", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gate-t17-"));
+  try {
+    const md = join(dir, "rules.md");
+    await writeFile(md, "禁令书\n", "utf8");
+    const llm = fakeLlm([{ ok: "deny", msg: "不该到" }]);
+    const a = makeCtx(llm);
+    await apply(a.ctx as never, { promptPath: md, route: { primary: { provider: "p1", model: "m1" } } }, { llm: llm as never, createUserMessage: CUM, makeAssembler: ASM });
+    const listener = a.listeners.find((l) => l.name === "tools/pre-execute");
+    const d = await listener!.fn(exec("bash", { command: "rm -rf /protected" }, { agent: {} }), next);
+    assert.equal(d?.kind, "allow", "id 缺=冬眠不审");
+    assert.equal((llm as { calls: unknown[] }).calls.length, 0);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
